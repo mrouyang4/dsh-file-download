@@ -1,5 +1,7 @@
 # dsh-file-download
 
+[![check](https://github.com/mrouyang4/dsh-file-download/actions/workflows/check.yml/badge.svg)](https://github.com/mrouyang4/dsh-file-download/actions/workflows/check.yml)
+
 给 **DSH（DeepSeek Harness）Web** 加一套「在浏览器里管文件」的能力：浏览、下载、上传、新建文件夹、目录打包、永久删除，以及聊天产出卡片与右侧预览面板的一键下载。
 
 DSH 的进程和文件都在宿主机（跑 `dsh web` 的那台机器）上，而浏览器经常是从另一台设备远程打开的。聊天里的文件卡片、预览面板只在宿主机上有意义——远程浏览器既打不开也拿不到。这个插件补一条同源、带登录态保护的 HTTP 通道，外加一个自带的文件管理页。
@@ -296,10 +298,10 @@ DSH 会在对话里渲染 `/api/files.download`、`/api/files.zip` 这样的链�
 ## 开发
 
 ```bash
-# 语法与 JSON 校验
-node --check lib/index.js && node --check lib/page.js && node --check lib/zip.js && node --check client/client.js
-node -e 'JSON.parse(require("fs").readFileSync("package.json","utf8"))'
+./scripts/check.sh     # 语法 + JSON + zip 写入器冒烟测试，与 CI 同一套检查
 ```
+
+CI（`.github/workflows/check.yml`）在每次 push 和 PR 上跑同样的三步：`node --check` 四个文件、JSON 校验、zip 写入器冒烟测试（生成物断言本地文件头与中央目录）。
 
 结构：
 
