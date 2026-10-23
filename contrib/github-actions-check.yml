@@ -1,0 +1,55 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Syntax check (host + client)
+        run: |
+          node --check lib/index.js
+          node --check lib/page.js
+          node --check lib/zip.js
+          node --check client/client.js
+
+      - name: JSON check
+        run: |
+          node -e 'for (const f of ["package.json","locale/zh.json","locale/en.json"]) JSON.parse(require("fs").readFileSync(f,"utf8")); console.log("json ok")'
+
+      - name: ZIP writer smoke test
+        run: |
+          node --input-type=module -e '
+          import { createReadStream } from "node:fs";
+          import { stat } from "node:fs/promises";
+          import { zipEntries, crc32 } from "./lib/zip.js";
+
+          const file = "README.md";
+          const info = await stat(file);
+          const chunks = [];
+          for await (const chunk of zipEntries([{
+            name: file,
+            size: info.size,
+            mtimeMs: info.mtimeMs,
+            opened: () => createReadStream(file),
+          }])) chunks.push(chunk);
+
+          const buf = Buffer.concat(chunks);
+          const local = buf.readUInt32LE(0);
+          if (local !== 0x04034b50) throw new Error("bad local header: " + local);
+          const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+          if (eocd < 0) throw new Error("missing end record");
+          const entries = buf.readUInt16LE(eocd + 10);
+          if (entries !== 1) throw new Error("entry count " + entries);
+          console.log("zip ok", buf.length, "bytes, entries", entries, "crc32 self-check", crc32(Buffer.from("hello")) >>> 0);
+          '
