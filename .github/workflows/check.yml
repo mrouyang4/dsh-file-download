@@ -53,3 +53,6 @@ jobs:
           if (entries !== 1) throw new Error("entry count " + entries);
           console.log("zip ok", buf.length, "bytes, entries", entries, "crc32 self-check", crc32(Buffer.from("hello")) >>> 0);
           '
+
+      - name: DSH plugin conformance
+        run: node scripts/conformance.mjs

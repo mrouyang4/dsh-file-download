@@ -15,6 +15,7 @@ DSH 的进程和文件都在宿主机（跑 `dsh web` 的那台机器）上，�
 ## 目录
 
 - [安装](#安装)
+- [符合 DSH 插件规范](#符合-dsh-插件规范)
 - [用法](#用法)
   - [1. 侧边栏「文件管理」](#1-侧边栏文件管理)
   - [2. 浏览与导航](#2-浏览与导航)
@@ -82,6 +83,48 @@ ln -s ~/.dsh/plugins/dsh-file-download ~/.dsh/profiles/web/node_modules/dsh-file
 > 之后：改 `lib/` 需要重启 DSH；只改 `client/client.js` 刷新页面即可（客户端 bundle 每次请求重新生成，带内容哈希）。
 
 ---
+
+## 符合 DSH 插件规范
+
+这是一个标准 DSH 插件（Cordis 插件 + web 客户端 bundle + locale 字典），不是外挂脚本。逐条对照如下，全部可用 `node scripts/conformance.mjs` 复核（CI 每次 push 都会跑）。
+
+| 规范要求 | 本插件的实现 |
+|---|---|
+| 宿主入口导出 `name` | `lib/index.js:31` — `export const name = "dsh-file-download"`，与包名一致 |
+| 声明依赖的宿主服务 `inject` | `lib/index.js:34` — `export const inject = ["connection", "webServer"]` |
+| 导出 `apply(ctx, config)` 作为生命周期入口 | `lib/index.js:528` — `export function apply(ctx, config = {})` |
+| 注册即受管，卸载即摘除 | 路由与页面都包在 `ctx.effect(() => { ... return dispose })` 里，插件停用时自动注销 6 条 API 与 `/files` |
+| 配置 schema（可选项） | 未声明 `Config`。`config.roots` 在 `makeRoots()` 内按 `Array.isArray` 校验，非法值退回工作区列表，不会因错误配置抛错 |
+| 宿主入口声明 | `package.json` → `main: "lib/index.js"`，`exports["."]` 指向同一文件 |
+| 客户端入口声明 | `exports["./client"]` → `client/client.js` |
+| web 客户端声明 | `dsh.client.platform: "web"`；`dsh.client.inject: ["@deepseek-ai/dsh-client-ui-sidebar"]` 声明它扩展的是侧边栏插件 |
+| 客户端 bundle 形态 | `client/client.js` 是 `window.__ModuleLoader__.load({ id: "dsh-file-download", factory })`，`id` 与包名一致，导出 `name` / `apply` / `inject` |
+| 清单可被外部读取 | `exports["./package.json"]`，便于 DSH 读取版本与 `dsh` 段 |
+| 本地化字典 | `locale/zh.json` + `locale/en.json`，两份 `meta.title` / `meta.description` 键集一致（插件列表里的名称与说明就来自这里） |
+| 宿主版本兼容声明 | `peerDependencies["@deepseek-ai/cordis"]: "~4.0.5"`，DSH 的安装与启动版本检查以此为准 |
+| 只依赖公开入口 | 宿主侧只 import `node:` 内置模块与本地文件，不深入 DSH 内部私有模块 |
+| 鉴权围栏 | 所有 `/api/*` 经 `connection` 服务（cookie 鉴权 + Host/Origin 栅栏），`/files` 走 `ctx.connection.requestRejection`，未登录 401、跨界 403 |
+
+自检：
+
+```bash
+node scripts/conformance.mjs     # 16 项规范检查
+./scripts/check.sh               # 语法 + JSON + zip 冒烟 + 上面这 16 项
+```
+
+输出形如：
+
+```
+ok    host.name                   dsh-file-download
+ok    host.inject                 connection, webServer
+ok    host.apply                  injects 2 services
+ok    exports["./client"]         ./client/client.js
+ok    dsh.client.platform         web
+ok    client loader               __ModuleLoader__.load
+ok    locale                      zh + en (description,title)
+
+符合 DSH 插件规范：16 项全部通过
+```
 
 ## 用法
 

@@ -32,4 +32,7 @@ const eocd = buf.lastIndexOf(Buffer.from([0x50,0x4b,0x05,0x06]));
 if (eocd < 0 || buf.readUInt16LE(eocd + 10) !== 1) throw new Error("bad end of central directory");
 console.log("  ok zip", buf.length, "bytes");
 '
+echo "== DSH plugin conformance =="
+node scripts/conformance.mjs
+
 echo "all checks passed"

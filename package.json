@@ -36,6 +36,9 @@
     "README.md",
     "LICENSE"
   ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5"
+  },
   "keywords": [
     "dsh",
     "deepseek-harness",
@@ -44,5 +47,6 @@
     "download",
     "upload"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "author": "mrouyang4"
 }
