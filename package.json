@@ -1,0 +1,48 @@
+{
+  "name": "dsh-file-download",
+  "version": "0.5.0",
+  "description": "Manage files on the DSH host from the browser: browse, download, upload, mkdir, ZIP, delete — plus one-click download on delivered-file cards and in the document preview pane.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mrouyang4/dsh-file-download.git"
+  },
+  "homepage": "https://github.com/mrouyang4/dsh-file-download",
+  "bugs": {
+    "url": "https://github.com/mrouyang4/dsh-file-download/issues"
+  },
+  "icon": "./icon.svg",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client/client.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "files": [
+    "lib",
+    "client",
+    "locale",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "file-manager",
+    "download",
+    "upload"
+  ],
+  "license": "MIT"
+}
