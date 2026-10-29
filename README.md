@@ -8,6 +8,9 @@ DSH 的进程和文件都在宿主机（跑 `dsh web` 的那台机器）上，�
 
 - 无需额外服务、无第三方依赖、不需要构建
 - 左侧新增「文件管理」入口：两级目录（工作区 → 目录），路径不越出工作区
+- **点一行就用**：文件夹行点进去、文件行就地预览（0.7.0 起没有「打开」「预览」按钮）
+- 预览很认真：Word 的段落/标题/表格、Excel 的工作表标签与网格、PPT 的逐页翻页都是**真正文**，
+  可选中、跟随明暗主题；PDF / 图片 / 文本 / 视频 / 音频按浏览器原生能力渲染，视频可拖进度条
 - 聊天里的产出卡片、`⋯` 菜单、右侧预览面板都长出一个「下载到本地」
 
 ---
@@ -30,9 +33,12 @@ DSH 的进程和文件都在宿主机（跑 `dsh web` 的那台机器）上，�
   - [11. 右侧预览面板的下载按钮](#11-右侧预览面板的下载按钮)
   - [12. 聊天里的下载链接](#12-聊天里的下载链接)
   - [13. 直接拼 URL](#13-直接拼-url)
+  - [14. 页内预览（0.6.0 / 0.7.0）](#14-页内预览)
+  - [15. 行的交互（0.7.0）](#15-行的交互)
 - [配置](#配置)
 - [HTTP 路由](#http-路由)
 - [安全边界](#安全边界)
+- [更新记录](#更新记录)
 - [故障排查](#故障排查)
 - [兼容性与已知限制](#兼容性与已知限制)
 - [开发](#开发)
@@ -150,7 +156,7 @@ ok    locale                      zh + en (description,title)
 
 | 操作 | 位置 | 结果 |
 |---|---|---|
-| 进子目录 | 行尾「打开」或双击目录行 | 面包屑变成 `AI-Job / _demo-office` |
+| 进子目录 | **点目录那一行**（0.7.0 起；键盘 `Enter` / `Space` 同样可以） | 面包屑变成 `AI-Job / _demo-office` |
 | 回上级 | 工具栏「↑ 上一级」 | 工作区根处按钮置灰，无法再往上 |
 | 换工作区 | 工具栏「← 工作区」 | 回到工作区列表 |
 | 找文件 | 工具栏「筛选当前目录…」 | 按名称实时过滤，输入 `pdf` 只看 PDF |
@@ -180,6 +186,7 @@ ok    locale                      zh + en (description,title)
 ### 5. 下载单个文件
 
 文件行尾点 **下载**：浏览器按宿主机的真实文件名保存（中文名正常，走 RFC 5987）。
+行尾按钮不会顺带触发行的点击（都 `stopPropagation`），下载的同时不会莫名其妙弹开预览。
 
 - 大文件流式传输，支持 `Range` 断点
 - 想**在浏览器里直接看**而不是下载（PDF / 图片）：用「复制链接」拿到的地址后面加 `&inline=1`
@@ -256,6 +263,52 @@ DSH 会在对话里渲染 `/api/files.download`、`/api/files.zip` 这样的链�
 
 `path` 可以是相对进程工作目录的路径，内部统一 `realpath` 后再做边界判定。
 
+### 14. 页内预览
+
+点**文件那一行**，文件就在右侧就地渲染，不用下载、也不用跳去对话。列表与预览左右分栏，
+窗口窄于 900px 自动改成上下排。
+
+| 类型 | 渲染方式 |
+|---|---|
+| `docx` | `GET /api/files.structured` → 段落 / 标题 / 列表 / 表格，真文本，可选中 |
+| `xlsx` | `GET /api/files.structured` → 工作表标签页 + 带行号、列标的网格，可横向滚动 |
+| `pptx` | `GET /api/files.structured` → 逐页翻页（`←` `→` 键可用），标题、副标题、要点分层 |
+| `doc / xls / ppt`（旧二进制格式）或结构化解析失败 | `GET /api/files.preview` → 宿主 `officeToPdf` 转 PDF，blob URL 交给 iframe |
+| `txt / md / json / yaml / 代码 / 日志 / csv` | 页面 `fetch` 后放进 `<pre>` 只读展示，超过 2 MB 截断并提示 |
+| `png / jpg / jpeg / gif / webp / svg / bmp / ico / avif` | `<img src="…&inline=1">`，浏览器原生渲染 |
+| `pdf` | `<iframe src="…&inline=1">`，走浏览器内置 PDF 阅读器 |
+| `mp4 / m4v / webm / ogv / mov / qt / mkv / avi / wmv / flv / mpeg / mpg / 3gp / 3g2 / m2ts` | `<video controls preload="metadata">`，走 `inline=1` 的 Range 流式，可拖进度条、可全屏 |
+| `mp3 / wav / m4a / aac / flac / opus / oga / ogg` | `<audio controls>`；`.ogg` 按音频处理（绝大多数是 Vorbis） |
+| 其它（压缩包、二进制等） | 提示「这个类型没有内置预览，点「下载」用本地软件打开」 |
+
+预览标题栏三个动作：**新标签**（`inline=1` 原样打开，方便浏览器自带工具栏/打印）、
+**下载**（`Content-Disposition: attachment`）、**关闭**（或按 `Esc`）。当前预览行在列表里高亮。
+
+实现要点：
+
+1. 预览全程没有前端依赖：结构化解析在宿主做（`lib/docx.js` 读 docx/pptx、`lib/xlsx.js` 读 xlsx，
+   自带最小 ZIP 读取，只用 `node:zlib`），页面只拿 JSON 再拼 DOM
+2. 文本可选中、跟随页面明暗主题——这正是把 Office 转成 PDF 铺进 iframe 做不到的；
+   和 `HuanLinOTO/dsh-plugin-better-sidebar-plugin-office`、`Melody-max114/dsh-excel-panel` 目标一致，
+   但那两个把 `docx-preview` / Univer / SheetJS 打进自己的 bundle，这里换成宿主解析、零前端体积
+3. 解析不了就**静默回退** PDF 路由，用户永远能看到东西，而不是一个红字报错
+4. 快速连点两个文件时有竞态保护：`await` 回来先比对当前预览路径，迟到的那次直接丢弃
+5. 幻灯片按 `presentation.xml` 的 `sldIdLst` 排（不是文件名顺序），标题占位符单独成行
+6. 全部解析都有硬上限（24 MB 输入、2000 行、200 列、20 张表、200 页、4000 块），超限只截断不报错
+7. 视频/音频不转码、不落临时文件：直接 `<video src="/api/files.download?path=…&inline=1">`，
+   服务端回 `206 Partial Content` + `accept-ranges: bytes`，拖动进度条由浏览器自己发 Range 请求完成。
+   `zemul/dsh-video-preview` 自建 `/video/*` 路由是为了绕开「整文件读进内存、没有 Range、20 MB 上限」，
+   我们的下载路由本来就有 Range，所以不需要再多开一条
+
+### 15. 行的交互
+
+列表里没有「打开」「预览」按钮了，整行就是入口：
+
+- 文件夹行：点击（或 `Enter` / `Space`）进入该目录
+- 文件行：点击（或 `Enter` / `Space`）在右侧预览
+- 行尾按钮仍然各管各的：`打包`（目录）、`下载`、`复制链接`、`删除`；它们都 `stopPropagation`，不会顺带触发行点击
+- 当前预览行有浅色底 + 左侧高亮，键盘 `Tab` 到行时有 `:focus-visible` 描边，`role="button"` + `aria-label` 便于读屏
+
 ---
 
 ## 配置
@@ -286,6 +339,8 @@ DSH 会在对话里渲染 `/api/files.download`、`/api/files.zip` 这样的链�
 | `/api/files.upload?path=<目录>&name=<文件名>[&overwrite=1]` | POST | 流式写入临时文件后原子改名；同名默认 **409** |
 | `/api/files.mkdir?path=<父目录>&name=<名称>` | POST | 新建文件夹；已存在 **409** |
 | `/api/files.delete?path=<条目>` | POST | 永久删除（`rm -rf`），拒绝删除根目录 |
+| `/api/files.preview?path=<Office 文件>` | GET / HEAD | 宿主 `officeToPdf` 转 PDF 后以 `inline` 返回（120 秒超时，pdf 二进制） |
+| `/api/files.structured?path=<Office 文件>` | GET / HEAD | 把 docx/xlsx/pptx 解析成结构化 JSON（段落、表格、单元格、幻灯片文本） |
 | `/files` | GET | 自带文件管理页 |
 
 `/api/*` 注册在 DSH 的 exact-Fetch 路由表上，继承浏览器 cookie 鉴权（仅 owner Peer 可用）；`/files` 通过 `ctx.connection.requestRejection` 做同样的 401/403 判定。
@@ -310,6 +365,24 @@ DSH 会在对话里渲染 `/api/files.download`、`/api/files.zip` 这样的链�
 
 ---
 
+## 更新记录
+
+- 0.7.0 **一行直达 + 结构化预览**：文件夹整行点击即进入、文件整行点击即预览（`打开` / `预览` 按钮已移除，
+  行支持 `Enter` / `Space`）；Word/Excel/PowerPoint 不再只看 PDF——宿主把 docx/xlsx/pptx 解析成结构化数据
+  （段落、表格、单元格、幻灯片），页面用原生 HTML 渲染，文本可选中、跟随明暗主题、零前端依赖；解析不了自动回退 PDF。
+  视频/音频扩展到 mp4·m4v·webm·ogv·mov·mkv·avi·wmv·flv·m2ts 与 mp3·m4a·aac·flac·opus·ogg
+- 0.6.0 **页内预览**：文件在右侧就地打开，与对话里的预览体验一致；PDF / 图片 / 音视频走 `inline=1` 流式，
+  Office 走新路由 `/api/files.preview` 由宿主转 PDF；预览标题栏带「新标签 / 下载 / 关闭」，`Esc` 可关
+- 0.5.0 **预览面板下载按钮**：右侧预览面板标题栏加 ⤓，下载正在预览的文件；工作区外文件给出明确提示，
+  不会下载出一个 JSON 错误体
+- 0.4.1 全异步文件操作：卡住的云端目录不再冻结整个进程（HTTP 524 的根因）；目录请求 20 秒前端超时
+- 0.4.0 「文件管理」重做导航：先进工作区列表（不再显示 `/Users/...` 上级路径），点进去才浏览；多工作区可切换，新增工作区自动出现
+- 0.3.x 上传、新建文件夹、永久删除
+- 0.2.0 下载页面 + 目录打包（自写流式 zip）
+- 0.1.0 产出卡片与预览面板的一键下载
+
+---
+
 ## 故障排查
 
 | 现象 | 原因 / 处理 |
@@ -331,7 +404,10 @@ DSH 会在对话里渲染 `/api/files.download`、`/api/files.zip` 这样的链�
 - 在 DSH `0.2.x`（Web）上开发并验证；用到 `slots`、`connection.requestRejection`、`workspaceRegistry`
 - 无第三方依赖；`lib/zip.js` 是自写的流式 STORE zip 写入器
 - Node 侧只用 `node:fs/promises` 与 `node:path`
-- 不做缩略图/在线预览渲染，预览交给浏览器原生能力（`inline=1`）
+- 预览是真渲染：文本/图片/PDF/音视频交给浏览器原生能力（`inline=1`），docx/xlsx/pptx 由宿主解析成结构化 JSON 再画，
+  `doc/xls/ppt` 与解析失败的情形回退到 LibreOffice 转 PDF（`officeToPdf` 不可用时不降级、直接报错）
+- Office 结构化解析只保留文字：图片、图表、SmartArt、形状位置、动画、批注、修订痕迹都不呈现
+- 压缩包、可执行文件、字体等不预览，只提供下载
 - 上传是整文件单请求，没有分片/断点续传
 - `Range` 每次独立，不保存断点状态
 - 卡片按钮与卡片菜单是 **DOM 增强**（宿主没开放对应槽），DSH 改版时这里最可能要跟着调；其余入口都用官方槽位
@@ -341,7 +417,7 @@ DSH 会在对话里渲染 `/api/files.download`、`/api/files.zip` 这样的链�
 ## 开发
 
 ```bash
-./scripts/check.sh     # 语法 + JSON + zip 写入器冒烟测试，与 CI 同一套检查
+./scripts/check.sh     # 语法 + JSON + zip 写入器 + Office 解析器冒烟 + DSH 规范 16 项，与 CI 同一套检查
 ```
 
 CI（`.github/workflows/check.yml`）在每次 push 和 PR 上跑同样的三步：`node --check` 四个文件、JSON 校验、zip 写入器冒烟测试（生成物断言本地文件头与中央目录）。
@@ -349,8 +425,10 @@ CI（`.github/workflows/check.yml`）在每次 push 和 PR 上跑同样的三步
 结构：
 
 ```
-lib/index.js    宿主侧：路由注册、路径边界、下载/列表/打包/上传/建目录/删除
-lib/page.js     /files 页面（HTML + 内联 JS，两级导航、拖拽上传、二次确认）
+lib/index.js    宿主侧：路由注册、路径边界、下载/列表/打包/上传/建目录/删除/预览/结构化
+lib/page.js     /files 页面（HTML + 内联 JS，两级导航、行内预览、拖拽上传、二次确认）
+lib/docx.js     docx / pptx 结构化解析（自带 ZIP 读取，只用 node:zlib）
+lib/xlsx.js     xlsx 结构化解析（共享字符串、日期序列号、公式缓存值）
 lib/zip.js      流式 STORE zip 写入器
 client/client.js 客户端：侧边栏面板、卡片按钮、卡片菜单、预览面板槽位、链接拦截
 locale/*.json   插件列表里的标题与说明
