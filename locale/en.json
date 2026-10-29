@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "File manager",
-    "description": "Manage workspace files in the browser: click a row to enter a folder or preview a file. Word/Excel/PowerPoint are parsed on the host into selectable text, spreadsheet grids, and slide decks; text, images, PDFs, video, and audio render directly. Also upload, download, create folders, delete permanently (with confirmation), and ZIP a directory. Workspaces are discovered automatically and paths never leave them. Adds one-click download on delivered-file cards."
+    "description": "Manage workspace files in the browser: click a row to enter a folder or preview a file. Word/Excel/PowerPoint are parsed on the host into selectable text, spreadsheet grids, and slide decks; text, images, PDFs, video, and audio render directly. Batch selection with checkboxes and Shift/Cmd ranges covers ZIP download, move, and delete, alongside upload, download, folder creation, and per-directory ZIP. Workspaces are discovered automatically and paths never leave them. Adds one-click download on delivered-file cards."
   }
 }

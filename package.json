@@ -1,7 +1,7 @@
 {
   "name": "dsh-file-download",
-  "version": "0.7.0",
-  "description": "Manage files on the DSH host from the browser: one-click row navigation, in-place preview (Word/Excel/PowerPoint parsed into live text and grids, PDF, text, images, video, audio), download, upload, mkdir, ZIP, delete — plus one-click download on delivered-file cards and in the document preview pane.",
+  "version": "0.8.0",
+  "description": "Manage files on the DSH host from the browser: one-click row navigation, in-place preview (Word/Excel/PowerPoint parsed into live text and grids, PDF, text, images, video, audio), OpenList-style batch selection (checkbox column, Shift range, Cmd/Ctrl click, select-all toolbar) with batch download ZIP / move / delete, download, upload, mkdir, ZIP, delete — plus one-click download on delivered-file cards and in the document preview pane.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mrouyang4/dsh-file-download.git"
